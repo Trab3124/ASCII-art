@@ -1,0 +1,18 @@
+{
+  "videos": [
+    {
+      "title": "Video 01 - Principal",
+      "src": "media/video1.mp4"
+    }
+  ],
+  "audios": [
+    {
+      "title": "Audio original del video",
+      "src": "video"
+    },
+    {
+      "title": "Pista Extra 01",
+      "src": "media/audio1.mp3"
+    }
+  ]
+}
