@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ASCII Procedural Scene — GitHub Pages</title>
+  <title>ASCII Motion Studio</title>
   <style>
     * {
       box-sizing: border-box;
@@ -27,24 +27,27 @@
       height: 100vh;
     }
 
-    /* Zona superior: escena procedural en cuadrícula ASCII */
-    .scene-panel {
+    /* Zona superior: Render ASCII del video */
+    .stage {
       position: relative;
-      flex: 1.35;
-      min-height: 55%;
-      background: #060911;
-      border-bottom: 1px solid rgba(120, 180, 255, 0.22);
+      flex: 1.5;
+      min-height: 60%;
+      background: #05070c;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 1px solid rgba(110, 231, 183, 0.25);
       overflow: hidden;
     }
 
-    #sceneCanvas {
+    #asciiCanvas {
       display: block;
-      width: 100%;
-      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
     }
 
-    /* Barra superior flotante */
-    .hud-bar {
+    /* HUD superior con controles */
+    .hud {
       position: absolute;
       top: 10px;
       left: 12px;
@@ -54,363 +57,562 @@
       justify-content: space-between;
       align-items: center;
       gap: 8px;
+      z-index: 10;
       pointer-events: none;
-      font-size: 12px;
     }
 
     .hud-group {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
       align-items: center;
+      gap: 6px;
       pointer-events: auto;
-    }
-
-    .badge, button, select {
-      background: rgba(8, 13, 24, 0.85);
-      color: #9be7ff;
-      border: 1px solid rgba(155, 231, 255, 0.35);
-      border-radius: 5px;
-      padding: 4px 9px;
-      font-family: inherit;
+      background: rgba(7, 11, 20, 0.84);
+      border: 1px solid rgba(110, 231, 183, 0.3);
+      padding: 6px 10px;
+      border-radius: 6px;
+      backdrop-filter: blur(6px);
       font-size: 12px;
     }
 
-    button, select {
+    button, select, .file-btn {
+      background: #0d1424;
+      color: #6ee7b7;
+      border: 1px solid rgba(110, 231, 183, 0.45);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-family: inherit;
+      font-size: 11.5px;
       cursor: pointer;
     }
 
-    button:hover, select:hover {
-      background: #9be7ff;
+    button:hover, select:hover, .file-btn:hover {
+      background: #6ee7b7;
       color: #05070c;
     }
 
-    /* Zona inferior: código fuente desplazándose en tiempo real */
-    .code-panel {
-      flex: 0.9;
-      min-height: 30%;
-      background: #080b12;
+    input[type="file"] {
+      display: none;
+    }
+
+    input[type="range"] {
+      accent-color: #6ee7b7;
+      width: 68px;
+      cursor: pointer;
+    }
+
+    label.inline {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: #a7f3d0;
+    }
+
+    /* Mensaje central de inicio / estado */
+    .overlay-msg {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: rgba(5, 7, 12, 0.82);
+      text-align: center;
+      padding: 20px;
+      z-index: 5;
+    }
+
+    .overlay-msg.hidden {
+      display: none;
+    }
+
+    .overlay-msg button {
+      font-size: 14px;
+      padding: 8px 16px;
+    }
+
+    /* Zona inferior: Consola de código + espectro de audio */
+    .terminal {
+      flex: 0.75;
+      min-height: 26%;
+      background: #080b13;
       padding: 10px 14px;
       display: flex;
       flex-direction: column;
+      justify-content: space-between;
       overflow: hidden;
     }
 
-    .code-header {
+    .terminal-header {
       display: flex;
       justify-content: space-between;
       font-size: 11px;
-      color: #6f87a5;
-      padding-bottom: 6px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-      margin-bottom: 6px;
+      color: #64748b;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 5px;
     }
 
-    #codeStream {
+    .terminal-body {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 14px;
       flex: 1;
+      padding-top: 6px;
       overflow: hidden;
       font-size: 11.5px;
-      line-height: 1.38;
-      color: #7ee787;
-      white-space: pre;
+      line-height: 1.35;
     }
 
-    .code-line-active {
+    #codeLines {
+      color: #6ee7b7;
+      white-space: pre;
+      overflow: hidden;
+    }
+
+    .active-line {
       color: #ffffff;
-      background: rgba(126, 231, 135, 0.12);
+      background: rgba(110, 231, 183, 0.14);
+    }
+
+    #audioSpectrum {
+      color: #38bdf8;
+      white-space: pre;
+      overflow: hidden;
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
+      padding-left: 12px;
+    }
+
+    video, audio {
+      display: none;
+    }
+
+    @media (max-width: 720px) {
+      .terminal-body {
+        grid-template-columns: 1fr;
+      }
+      #audioSpectrum {
+        display: none;
+      }
     }
   </style>
 </head>
 <body>
   <div class="app">
-    <section class="scene-panel">
-      <canvas id="sceneCanvas"></canvas>
+    <main class="stage">
+      <canvas id="asciiCanvas"></canvas>
 
-      <div class="hud-bar">
+      <div class="hud">
         <div class="hud-group">
-          <span class="badge" id="statusBadge">FPS: 00 | T: 00.0s</span>
-          <span class="badge">GRID ASCII ENGINE</span>
+          <select id="videoSelect" title="Videos del repositorio"></select>
+          <select id="audioSelect" title="Pista de audio"></select>
+
+          <label class="file-btn" title="Probar video desde tu dispositivo">
+            + Video local
+            <input type="file" id="localVideoInput" accept="video/*" />
+          </label>
+
+          <label class="file-btn" title="Probar audio desde tu dispositivo">
+            + Audio local
+            <input type="file" id="localAudioInput" accept="audio/*" />
+          </label>
         </div>
 
         <div class="hud-group">
-          <select id="themeSelect" title="Estilo de escena">
-            <option value="winter" selected>Escena Invernal + Trineo</option>
-            <option value="cyber">Horizonte + Partículas</option>
+          <button id="playBtn">Pausar</button>
+          <button id="muteBtn">Activar sonido</button>
+
+          <select id="paletteSelect" title="Paleta ASCII">
+            <option value="color" selected>Color Real</option>
+            <option value="matrix">Verde Terminal</option>
+            <option value="white">Blanco Puro</option>
+            <option value="amber">Ámbar Retro</option>
           </select>
-          <button id="toggleBtn">Pausar</button>
-          <button id="burstBtn">Fuegos / Pulso</button>
+
+          <label class="inline" title="Detalle de caracteres">
+            Detalle
+            <input type="range" id="detailSlider" min="4" max="14" value="9" />
+          </label>
         </div>
       </div>
-    </section>
 
-    <section class="code-panel">
-      <div class="code-header">
-        <span>scene_engine.js — render loop</span>
-        <span id="frameCounter">FRAME #0</span>
+      <div id="overlayMsg" class="overlay-msg">
+        <p id="overlayText">Cargando catálogo ASCII...</p>
+        <button id="startOverlayBtn" style="display:none;">Iniciar reproducción con audio</button>
       </div>
-      <div id="codeStream"></div>
+    </main>
+
+    <section class="terminal">
+      <div class="terminal-header">
+        <span id="telemetryLeft">ENGINE: READY | GRID: 0x0</span>
+        <span id="telemetryRight">FPS: 00 | FRAME #0</span>
+      </div>
+      <div class="terminal-body">
+        <div id="codeLines"></div>
+        <div id="audioSpectrum"></div>
+      </div>
     </section>
   </div>
 
+  <video id="videoEl" loop muted playsinline crossorigin="anonymous"></video>
+  <audio id="audioEl" loop crossorigin="anonymous"></audio>
+
   <script>
-    const canvas = document.getElementById("sceneCanvas");
+    const videoEl = document.getElementById("videoEl");
+    const audioEl = document.getElementById("audioEl");
+    const canvas = document.getElementById("asciiCanvas");
     const ctx = canvas.getContext("2d");
-    const statusBadge = document.getElementById("statusBadge");
-    const frameCounter = document.getElementById("frameCounter");
-    const codeStream = document.getElementById("codeStream");
-    const themeSelect = document.getElementById("themeSelect");
-    const toggleBtn = document.getElementById("toggleBtn");
-    const burstBtn = document.getElementById("burstBtn");
 
-    const CHAR_RAMP = " .:-=+*#%@";
-    const CELL_W = 8;
-    const CELL_H = 12;
+    const offscreen = document.createElement("canvas");
+    const offCtx = offscreen.getContext("2d", { willReadFrequently: true });
 
-    let cols = 0;
-    let rows = 0;
-    let running = true;
-    let startTime = performance.now();
-    let lastFrameTime = performance.now();
+    const videoSelect = document.getElementById("videoSelect");
+    const audioSelect = document.getElementById("audioSelect");
+    const localVideoInput = document.getElementById("localVideoInput");
+    const localAudioInput = document.getElementById("localAudioInput");
+    const playBtn = document.getElementById("playBtn");
+    const muteBtn = document.getElementById("muteBtn");
+    const paletteSelect = document.getElementById("paletteSelect");
+    const detailSlider = document.getElementById("detailSlider");
+
+    const overlayMsg = document.getElementById("overlayMsg");
+    const overlayText = document.getElementById("overlayText");
+    const startOverlayBtn = document.getElementById("startOverlayBtn");
+
+    const telemetryLeft = document.getElementById("telemetryLeft");
+    const telemetryRight = document.getElementById("telemetryRight");
+    const codeLinesEl = document.getElementById("codeLines");
+    const audioSpectrumEl = document.getElementById("audioSpectrum");
+
+    const CHARS = " .:-=+*#%@";
+    const CHAR_ASPECT = 0.56;
+
+    let cellSize = 18 - parseInt(detailSlider.value, 10);
     let frameCount = 0;
+    let lastTime = performance.now();
     let fps = 60;
+    let isMuted = true;
 
-    // Partículas (chispas / fuegos artificiales / nieve)
-    const particles = [];
-    const snow = [];
+    // Web Audio API para analizar frecuencias en tiempo real
+    let audioCtx = null;
+    let analyser = null;
+    let freqData = null;
+    let videoSourceNode = null;
+    let audioSourceNode = null;
 
-    function resize() {
-      const rect = canvas.parentElement.getBoundingClientRect();
-      canvas.width = Math.max(320, Math.floor(rect.width));
-      canvas.height = Math.max(200, Math.floor(rect.height));
-      cols = Math.floor(canvas.width / CELL_W);
-      rows = Math.floor(canvas.height / CELL_H);
-
-      if (snow.length === 0) {
-        for (let i = 0; i < 90; i++) {
-          snow.push({
-            x: Math.random() * cols,
-            y: Math.random() * rows,
-            vy: 0.18 + Math.random() * 0.45,
-            vx: (Math.random() - 0.5) * 0.25,
-            ch: Math.random() > 0.5 ? "*" : "."
-          });
-        }
-      }
-    }
-
-    function spawnBurst(cx, cy, count = 36) {
-      const palette = ["#ff5f56", "#ffbd2e", "#27c93f", "#58a6ff", "#f778ba", "#fff3b0"];
-      for (let i = 0; i < count; i++) {
-        const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.25;
-        const speed = 0.25 + Math.random() * 0.95;
-        particles.push({
-          x: cx,
-          y: cy,
-          vx: Math.cos(angle) * speed * 1.4,
-          vy: Math.sin(angle) * speed * 0.85,
-          life: 1.0,
-          decay: 0.015 + Math.random() * 0.02,
-          color: palette[i % palette.length],
-          ch: ["*", "+", "o", "#"][i % 4]
-        });
-      }
-    }
-
-    // Líneas de código mostradas en el panel inferior
-    const SOURCE_LINES = [
-      "function updateProceduralScene(t, cols, rows) {",
-      "  const moonX = Math.floor(cols * 0.76);",
-      "  const moonY = Math.floor(rows * 0.24);",
-      "  drawLunarDisc(grid, moonX, moonY, radius = 6);",
+    const ENGINE_CODE = [
+      "const frame = captureVideoFrame(videoEl, cols, rows);",
+      "const pixels = offCtx.getImageData(0, 0, cols, rows).data;",
+      "for (let y = 0; y < rows; y++) {",
       "  for (let x = 0; x < cols; x++) {",
-      "    const hillY = Math.floor(rows * 0.72 + Math.sin(x * 0.06 + t * 0.4) * 3);",
-      "    fillTerrain(grid, x, hillY, rows);",
+      "    const luma = (0.299*r + 0.587*g + 0.114*b) / 255;",
+      "    const idx = Math.floor(contrast(luma) * (CHARS.length - 1));",
+      "    drawGlyph(CHARS[idx], x * charW, y * cellSize, rgb);",
       "  }",
-      "  const sleighX = ((t * 11) % (cols + 26)) - 13;",
-      "  const sleighY = Math.floor(rows * 0.42 + Math.sin(t * 2.4) * 2.2);",
-      "  drawSleighAndReindeer(grid, sleighX, sleighY, t);",
-      "  updateParticles(particles, dt);",
-      "  renderAsciiMatrix(ctx, grid, charRamp);",
-      "}"
+      "}",
+      "syncAudioSpectrum(analyser, freqData);"
     ];
 
-    function renderCodePanel(tick) {
-      const activeIdx = Math.floor(tick / 8) % SOURCE_LINES.length;
-      const htmlLines = [];
-      for (let i = 0; i < SOURCE_LINES.length; i++) {
-        const lineNum = String(i + 1).padStart(2, "0");
-        const isActive = i === activeIdx;
-        const cls = isActive ? ' class="code-line-active"' : "";
-        const marker = isActive ? "▶ " : "  ";
-        htmlLines.push(`<div${cls}>${marker}${lineNum} | ${SOURCE_LINES[i]}</div>`);
+    function initAudioAnalyser() {
+      if (audioCtx) {
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        return;
       }
-      codeStream.innerHTML = htmlLines.join("");
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      audioCtx = new AudioContextClass();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      freqData = new Uint8Array(analyser.frequencyBinCount);
+
+      try {
+        videoSourceNode = audioCtx.createMediaElementSource(videoEl);
+        videoSourceNode.connect(analyser);
+      } catch (e) {}
+
+      try {
+        audioSourceNode = audioCtx.createMediaElementSource(audioEl);
+        audioSourceNode.connect(analyser);
+      } catch (e) {}
+
+      analyser.connect(audioCtx.destination);
     }
 
-    function drawChar(c, r, ch, color) {
-      if (c < 0 || c >= cols || r < 0 || r >= rows) return;
-      ctx.fillStyle = color;
-      ctx.fillText(ch, c * CELL_W, r * CELL_H);
-    }
-
-    function drawSprite(startC, startR, spriteLines, color) {
-      for (let dy = 0; dy < spriteLines.length; dy++) {
-        const line = spriteLines[dy];
-        for (let dx = 0; dx < line.length; dx++) {
-          const ch = line[dx];
-          if (ch !== " ") {
-            drawChar(startC + dx, startR + dy, ch, color);
-          }
+    function applyAudioMode() {
+      const mode = audioSelect.value;
+      if (mode === "video") {
+        audioEl.pause();
+        videoEl.muted = isMuted;
+        audioEl.muted = true;
+      } else {
+        videoEl.muted = true;
+        audioEl.muted = isMuted;
+        if (!videoEl.paused) {
+          audioEl.play().catch(() => {});
         }
       }
+      muteBtn.textContent = isMuted ? "Activar sonido" : "Silenciar";
     }
 
-    function renderScene(now) {
-      const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
-      lastFrameTime = now;
-      const t = (now - startTime) / 1000;
+    function resizeCanvas() {
+      const stageRect = canvas.parentElement.getBoundingClientRect();
+      const vw = videoEl.videoWidth || 640;
+      const vh = videoEl.videoHeight || 360;
+      const ratio = vw / vh;
 
-      if (running) {
+      let targetW = stageRect.width * 0.96;
+      let targetH = targetW / ratio;
+
+      if (targetH > stageRect.height * 0.92) {
+        targetH = stageRect.height * 0.92;
+        targetW = targetH * ratio;
+      }
+
+      canvas.width = Math.max(240, Math.floor(targetW));
+      canvas.height = Math.max(160, Math.floor(targetH));
+    }
+
+    function updateTerminal(cols, rows, bassBoost) {
+      const activeIdx = Math.floor(frameCount / 6) % ENGINE_CODE.length;
+      codeLinesEl.innerHTML = ENGINE_CODE.map((line, i) => {
+        const num = String(i + 1).padStart(2, "0");
+        const cls = i === activeIdx ? ' class="active-line"' : "";
+        return `<div${cls}>${i === activeIdx ? "▶" : " "} ${num} | ${line}</div>`;
+      }).join("");
+
+      if (analyser && freqData && !isMuted) {
+        analyser.getByteFrequencyData(freqData);
+        const bars = [];
+        for (let i = 0; i < 10; i++) {
+          const val = freqData[i] || 0;
+          const len = Math.floor((val / 255) * 24);
+          const bar = "█".repeat(len) + "░".repeat(24 - len);
+          bars.push(`CH${String(i + 1).padStart(2, "0")} [${bar}] ${String(val).padStart(3, "0")}`);
+        }
+        audioSpectrumEl.textContent = bars.join("\n");
+      } else {
+        audioSpectrumEl.textContent =
+          "AUDIO ANALYZER: STANDBY\n" +
+          "Pulsa 'Activar sonido' para\n" +
+          "sincronizar espectro en vivo.";
+      }
+
+      telemetryLeft.textContent = `GRID: ${cols}x${rows} | BASS: ${(bassBoost * 100).toFixed(0)}%`;
+      telemetryRight.textContent = `FPS: ${String(fps).padStart(2, "0")} | FRAME #${frameCount}`;
+    }
+
+    function renderLoop(now) {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
+      if (!videoEl.paused && !videoEl.ended && videoEl.readyState >= 2) {
         frameCount++;
-        if (frameCount % 10 === 0) {
-          fps = Math.round(1 / Math.max(dt, 0.001));
+        if (frameCount % 10 === 0 && dt > 0) {
+          fps = Math.min(60, Math.round(1 / dt));
         }
 
-        ctx.fillStyle = "#060911";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.font = `bold ${CELL_H}px "Courier New", monospace`;
-        ctx.textBaseline = "top";
-
-        const isWinter = themeSelect.value === "winter";
-
-        // 1. Estrellas de fondo
-        for (let i = 0; i < 35; i++) {
-          const sx = (i * 37) % Math.max(1, cols);
-          const sy = (i * 19) % Math.max(1, Math.floor(rows * 0.55));
-          const twinkle = Math.sin(t * 3 + i) > 0.3 ? "+" : ".";
-          drawChar(sx, sy, twinkle, "#4c6380");
+        let bassBoost = 0;
+        if (analyser && freqData && !isMuted) {
+          analyser.getByteFrequencyData(freqData);
+          bassBoost = ((freqData[0] || 0) + (freqData[1] || 0) + (freqData[2] || 0)) / (3 * 255);
         }
 
-        // 2. Luna / Astro superior derecha
-        const moonC = Math.floor(cols * 0.78);
-        const moonR = Math.max(4, Math.floor(rows * 0.22));
-        const rad = Math.max(3, Math.min(6, Math.floor(Math.min(cols, rows) * 0.08)));
+        const effectiveCell = Math.max(4, cellSize - Math.round(bassBoost * 1.5));
+        const cols = Math.floor(canvas.width / (effectiveCell * CHAR_ASPECT));
+        const rows = Math.floor(canvas.height / effectiveCell);
 
-        for (let dr = -rad; dr <= rad; dr++) {
-          for (let dc = -rad * 2; dc <= rad * 2; dc++) {
-            const dist = Math.sqrt((dc / 2) ** 2 + dr ** 2);
-            if (dist <= rad) {
-              const isCrater = (dc === -2 && dr === -1) || (dc === 2 && dr === 1);
-              const ch = isCrater ? "o" : dist > rad - 1.1 ? "%" : "@";
-              drawChar(moonC + dc, moonR + dr, ch, isWinter ? "#fff3b0" : "#79c0ff");
+        if (cols > 0 && rows > 0) {
+          offscreen.width = cols;
+          offscreen.height = rows;
+          offCtx.drawImage(videoEl, 0, 0, cols, rows);
+
+          const data = offCtx.getImageData(0, 0, cols, rows).data;
+
+          ctx.fillStyle = "#05070c";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.font = `bold ${effectiveCell}px "Courier New", monospace`;
+          ctx.textBaseline = "top";
+
+          const palette = paletteSelect.value;
+          if (palette === "matrix") ctx.fillStyle = "#6ee7b7";
+          else if (palette === "white") ctx.fillStyle = "#f8fafc";
+          else if (palette === "amber") ctx.fillStyle = "#fbbf24";
+
+          const charW = effectiveCell * CHAR_ASPECT;
+
+          for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+              const idx = (y * cols + x) * 4;
+              const r = data[idx];
+              const g = data[idx + 1];
+              const b = data[idx + 2];
+
+              let luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+              luma = Math.min(1, Math.max(0, (luma - 0.12) * 1.32 + bassBoost * 0.12));
+
+              const charIndex = Math.floor(luma * (CHARS.length - 1));
+              const glyph = CHARS[charIndex];
+
+              if (glyph !== " ") {
+                if (palette === "color") {
+                  ctx.fillStyle = `rgb(${r},${g},${b})`;
+                }
+                ctx.fillText(glyph, x * charW, y * effectiveCell);
+              }
             }
           }
-        }
 
-        // 3. Colinas y terreno inferior
-        const horizonR = Math.floor(rows * 0.74);
-        for (let c = 0; c < cols; c++) {
-          const wave = Math.sin(c * 0.07 + t * 0.5) * 2.2 + Math.cos(c * 0.03 - t * 0.25) * 1.5;
-          const topR = Math.floor(horizonR + wave);
-          for (let r = topR; r < rows; r++) {
-            const depthRatio = (r - topR) / Math.max(1, rows - topR);
-            const idx = Math.min(CHAR_RAMP.length - 1, Math.floor(depthRatio * (CHAR_RAMP.length - 1)));
-            const ch = r === topR ? "^" : CHAR_RAMP[idx];
-            const col = isWinter
-              ? (r === topR ? "#e6f1ff" : "#3a5a78")
-              : (r === topR ? "#58a6ff" : "#1f3a52");
-            drawChar(c, r, ch, col);
+          if (frameCount % 3 === 0) {
+            updateTerminal(cols, rows, bassBoost);
           }
         }
-
-        // 4. Nieve / partículas ambientales
-        for (const s of snow) {
-          s.x += s.vx + Math.sin(t + s.y) * 0.08;
-          s.y += s.vy;
-          if (s.y >= rows) {
-            s.y = 0;
-            s.x = Math.random() * cols;
-          }
-          if (s.x < 0) s.x += cols;
-          if (s.x >= cols) s.x -= cols;
-          drawChar(Math.floor(s.x), Math.floor(s.y), s.ch, isWinter ? "#cde6ff" : "#58a6ff");
-        }
-
-        // 5. Elemento móvil principal (Trineo + Reno o Nave/Pulso)
-        const span = cols + 34;
-        const movingC = Math.floor(((t * 14) % span) - 17);
-        const movingR = Math.max(3, Math.floor(rows * 0.42 + Math.sin(t * 2.6) * 2));
-
-        const legFrame = Math.floor(t * 8) % 2 === 0 ? "/" : "\\";
-        const sprite = isWinter
-          ? [
-              "        _.-''''-._       ",
-              "      .'  (o)   ; '.     ",
-              "  ___/_____________\\___  ",
-              "  \\____[SANTA]_________/  ",
-              `   '--/---\\---/---\\--'  ~${legFrame}`
-            ]
-          : [
-              "      .---.      ",
-              "   __/     \\__   ",
-              "  (  [CORE]   )  ",
-              `   '---v---v--' ~${legFrame}`
-            ];
-
-        drawSprite(movingC, movingR, sprite, isWinter ? "#ff7b72" : "#7ee787");
-
-        // Fuegos artificiales automáticos ocasionales
-        if (Math.random() < 0.035) {
-          spawnBurst(
-            Math.floor(cols * (0.2 + Math.random() * 0.6)),
-            Math.max(3, Math.floor(rows * (0.15 + Math.random() * 0.3))),
-            28
-          );
-        }
-
-        // Actualizar y dibujar partículas de explosión
-        for (let i = particles.length - 1; i >= 0; i--) {
-          const p = particles[i];
-          p.x += p.vx;
-          p.y += p.vy;
-          p.vy += 0.015;
-          p.life -= p.decay;
-          if (p.life <= 0) {
-            particles.splice(i, 1);
-            continue;
-          }
-          drawChar(Math.floor(p.x), Math.floor(p.y), p.ch, p.color);
-        }
-
-        // Título central superior estilo banner
-        const banner = isWinter ? "=== ASCII MOTION ENGINE ===" : "=== LIVE GRID STREAM ===";
-        const bannerC = Math.floor((cols - banner.length) / 2);
-        drawSprite(bannerC, 2, [banner], "#f0f6fc");
-
-        // HUD y código inferior
-        statusBadge.textContent = `FPS: ${String(fps).padStart(2, "0")} | T: ${t.toFixed(1)}s`;
-        frameCounter.textContent = `FRAME #${frameCount}`;
-        renderCodePanel(frameCount);
       }
 
-      requestAnimationFrame(renderScene);
+      requestAnimationFrame(renderLoop);
     }
 
-    window.addEventListener("resize", resize);
-    toggleBtn.addEventListener("click", () => {
-      running = !running;
-      toggleBtn.textContent = running ? "Pausar" : "Reanudar";
-      if (running) {
-        lastFrameTime = performance.now();
+    function loadVideoSource(src) {
+      overlayMsg.classList.remove("hidden");
+      overlayText.textContent = "Cargando video...";
+      startOverlayBtn.style.display = "none";
+
+      videoEl.src = src;
+      videoEl.load();
+    }
+
+    videoEl.addEventListener("loadedmetadata", () => {
+      resizeCanvas();
+      videoEl.play()
+        .then(() => {
+          overlayMsg.classList.add("hidden");
+          applyAudioMode();
+        })
+        .catch(() => {
+          overlayText.textContent = "Listo para reproducir en ASCII";
+          startOverlayBtn.style.display = "inline-block";
+        });
+    });
+
+    videoEl.addEventListener("error", () => {
+      overlayMsg.classList.remove("hidden");
+      overlayText.textContent = "No se encontró el video en el repo. Sube un .mp4 o usa '+ Video local'.";
+      startOverlayBtn.style.display = "none";
+    });
+
+    startOverlayBtn.addEventListener("click", () => {
+      initAudioAnalyser();
+      isMuted = false;
+      videoEl.play();
+      applyAudioMode();
+      overlayMsg.classList.add("hidden");
+    });
+
+    playBtn.addEventListener("click", () => {
+      initAudioAnalyser();
+      if (videoEl.paused) {
+        videoEl.play();
+        if (audioSelect.value !== "video") audioEl.play().catch(() => {});
+        playBtn.textContent = "Pausar";
+      } else {
+        videoEl.pause();
+        audioEl.pause();
+        playBtn.textContent = "Reanudar";
       }
     });
 
-    burstBtn.addEventListener("click", () => {
-      spawnBurst(Math.floor(cols * 0.5), Math.max(4, Math.floor(rows * 0.28)), 48);
+    muteBtn.addEventListener("click", () => {
+      initAudioAnalyser();
+      isMuted = !isMuted;
+      applyAudioMode();
     });
 
-    resize();
-    requestAnimationFrame(renderScene);
+    videoSelect.addEventListener("change", () => {
+      loadVideoSource(videoSelect.value);
+    });
+
+    audioSelect.addEventListener("change", () => {
+      initAudioAnalyser();
+      const val = audioSelect.value;
+      if (val !== "video") {
+        audioEl.src = val;
+        audioEl.load();
+      }
+      applyAudioMode();
+    });
+
+    localVideoInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      const opt = document.createElement("option");
+      opt.value = url;
+      opt.textContent = `Local: ${file.name}`;
+      videoSelect.appendChild(opt);
+      videoSelect.value = url;
+      loadVideoSource(url);
+    });
+
+    localAudioInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      const opt = document.createElement("option");
+      opt.value = url;
+      opt.textContent = `Local: ${file.name}`;
+      audioSelect.appendChild(opt);
+      audioSelect.value = url;
+      audioEl.src = url;
+      audioEl.load();
+      initAudioAnalyser();
+      isMuted = false;
+      applyAudioMode();
+    });
+
+    detailSlider.addEventListener("input", (e) => {
+      cellSize = 18 - parseInt(e.target.value, 10);
+    });
+
+    window.addEventListener("resize", resizeCanvas);
+
+    async function boot() {
+      try {
+        const res = await fetch(`playlist.json?v=${Date.now()}`);
+        if (!res.ok) throw new Error("Sin playlist.json");
+        const data = await res.json();
+
+        (data.videos || []).forEach((v) => {
+          const opt = document.createElement("option");
+          opt.value = v.src;
+          opt.textContent = v.title;
+          videoSelect.appendChild(opt);
+        });
+
+        (data.audios || []).forEach((a) => {
+          const opt = document.createElement("option");
+          opt.value = a.src;
+          opt.textContent = a.title;
+          audioSelect.appendChild(opt);
+        });
+
+        if (videoSelect.options.length > 0) {
+          loadVideoSource(videoSelect.value);
+        } else {
+          overlayText.textContent = "Agrega videos en playlist.json o usa '+ Video local'.";
+        }
+      } catch (err) {
+        const defaultAudio = document.createElement("option");
+        defaultAudio.value = "video";
+        defaultAudio.textContent = "Audio original del video";
+        audioSelect.appendChild(defaultAudio);
+
+        overlayText.textContent = "Sube playlist.json y tus .mp4 a media/ o prueba con '+ Video local'.";
+      }
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    boot();
   </script>
 </body>
 </html>
