@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASCII Motion</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #050505;
+      color: #00ff66;
+      font-family: "Courier New", Courier, monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    #canvas-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    canvas {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+    }
+
+    /* Panel flotante discreto para visitantes */
+    .controls {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      background: rgba(10, 10, 10, 0.82);
+      border: 1px solid rgba(0, 255, 102, 0.35);
+      padding: 8px 14px;
+      border-radius: 8px;
+      backdrop-filter: blur(6px);
+      z-index: 10;
+      font-size: 12px;
+    }
+
+    .controls button,
+    .controls select {
+      background: #111;
+      color: #00ff66;
+      border: 1px solid #00ff66;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .controls button:hover,
+    .controls select:hover {
+      background: #00ff66;
+      color: #050505;
+    }
+
+    .controls label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    input[type="range"] {
+      accent-color: #00ff66;
+      width: 75px;
+      cursor: pointer;
+    }
+
+    video {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="canvas-container">
+    <canvas id="asciiCanvas"></canvas>
+  </div>
+
+  <!-- Video fuente oculto -->
+  <video id="sourceVideo" src="video.mp4" autoplay loop muted playsinline crossorigin="anonymous"></video>
+
+  <!-- Controles para quien visite la web -->
+  <div class="controls">
+    <button id="playPauseBtn">Pausar</button>
+    <button id="muteBtn">Activar sonido</button>
+
+    <label>
+      Color:
+      <select id="colorMode">
+        <option value="matrix" selected>Verde Terminal</option>
+        <option value="white">Monocromo Blanco</option>
+        <option value="amber">Ámbar Retro</option>
+        <option value="color">Color Original</option>
+      </select>
+    </label>
+
+    <label>
+      Detalle:
+      <input type="range" id="densitySlider" min="4" max="14" value="7" />
+    </label>
+  </div>
+
+  <script>
+    const video = document.getElementById("sourceVideo");
+    const canvas = document.getElementById("asciiCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Canvas auxiliar fuera de pantalla para leer píxeles
+    const offscreen = document.createElement("canvas");
+    const offCtx = offscreen.getContext("2d", { willReadFrequently: true });
+
+    const playPauseBtn = document.getElementById("playPauseBtn");
+    const muteBtn = document.getElementById("muteBtn");
+    const colorModeSelect = document.getElementById("colorMode");
+    const densitySlider = document.getElementById("densitySlider");
+
+    // Mapa de caracteres de oscuro a claro (puedes invertirlo si tu fondo es blanco)
+    const ASCII_CHARS = " .:-=+*#%@";
+
+    // Tamaño de celda en píxeles (menor = más resolución/detalle)
+    let cellSize = parseInt(densitySlider.value, 10);
+    // Factor de corrección porque los caracteres son más altos que anchos
+    const CHAR_ASPECT = 0.55;
+
+    function resizeCanvas() {
+      if (!video.videoWidth || !video.videoHeight) return;
+
+      const maxWidth = window.innerWidth * 0.96;
+      const maxHeight = window.innerHeight * 0.94;
+      const videoRatio = video.videoWidth / video.videoHeight;
+
+      let targetWidth = maxWidth;
+      let targetHeight = targetWidth / videoRatio;
+
+      if (targetHeight > maxHeight) {
+        targetHeight = maxHeight;
+        targetWidth = targetHeight * videoRatio;
+      }
+
+      canvas.width = Math.floor(targetWidth);
+      canvas.height = Math.floor(targetHeight);
+    }
+
+    function renderFrame() {
+      if (video.paused || video.ended) {
+        requestAnimationFrame(renderFrame);
+        return;
+      }
+
+      const cols = Math.floor(canvas.width / (cellSize * CHAR_ASPECT));
+      const rows = Math.floor(canvas.height / cellSize);
+
+      if (cols <= 0 || rows <= 0) {
+        requestAnimationFrame(renderFrame);
+        return;
+      }
+
+      offscreen.width = cols;
+      offscreen.height = rows;
+
+      // Dibujar fotograma reducido en el canvas auxiliar
+      offCtx.drawImage(video, 0, 0, cols, rows);
+      const frameData = offCtx.getImageData(0, 0, cols, rows).data;
+
+      // Limpiar pantalla principal
+      ctx.fillStyle = "#050505";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.font = `bold ${cellSize}px "Courier New", monospace`;
+      ctx.textBaseline = "top";
+
+      const mode = colorModeSelect.value;
+      if (mode === "matrix") ctx.fillStyle = "#00ff66";
+      else if (mode === "white") ctx.fillStyle = "#f2f2f2";
+      else if (mode === "amber") ctx.fillStyle = "#ffb000";
+
+      const charWidth = cellSize * CHAR_ASPECT;
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const idx = (y * cols + x) * 4;
+          const r = frameData[idx];
+          const g = frameData[idx + 1];
+          const b = frameData[idx + 2];
+
+          // Luminancia perceptual + ligero refuerzo de contraste
+          let brightness = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          brightness = Math.min(1, Math.max(0, (brightness - 0.15) * 1.35));
+
+          const charIndex = Math.floor(brightness * (ASCII_CHARS.length - 1));
+          const char = ASCII_CHARS[charIndex];
+
+          if (char !== " ") {
+            if (mode === "color") {
+              ctx.fillStyle = `rgb(${r},${g},${b})`;
+            }
+            ctx.fillText(char, x * charWidth, y * cellSize);
+          }
+        }
+      }
+
+      requestAnimationFrame(renderFrame);
+    }
+
+    // Eventos de video y ventana
+    video.addEventListener("loadedmetadata", () => {
+      resizeCanvas();
+      video.play().catch(() => {
+        playPauseBtn.textContent = "Reproducir";
+      });
+      renderFrame();
+    });
+
+    window.addEventListener("resize", resizeCanvas);
+
+    // Controles interactivos
+    playPauseBtn.addEventListener("click", () => {
+      if (video.paused) {
+        video.play();
+        playPauseBtn.textContent = "Pausar";
+      } else {
+        video.pause();
+        playPauseBtn.textContent = "Reproducir";
+      }
+    });
+
+    muteBtn.addEventListener("click", () => {
+      video.muted = !video.muted;
+      muteBtn.textContent = video.muted ? "Activar sonido" : "Silenciar";
+    });
+
+    densitySlider.addEventListener("input", (e) => {
+      // Invertimos para que derecha = más detalle (celda más pequeña)
+      cellSize = 18 - parseInt(e.target.value, 10);
+    });
+  </script>
+</body>
+</html>
